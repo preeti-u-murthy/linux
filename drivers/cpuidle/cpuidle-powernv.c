@@ -64,6 +64,11 @@ static int fastsleep_loop(struct cpuidle_device *dev,
 	int cpu = dev->cpu;
 	unsigned long old_lpcr = mfspr(SPRN_LPCR);
 	unsigned long new_lpcr;
+	static cpumask_t printed_mask = CPU_MASK_NONE;
+	static DEFINE_SPINLOCK(printed_lock);
+	unsigned int mycpu = smp_processor_id();
+	unsigned long wakeup_srr1=0;
+	char *srr1_wakeup_bits[]={"???","NoNAP","NAP","SLEEP"};
 
 	if (unlikely(system_state < SYSTEM_RUNNING))
 		return index;
@@ -77,7 +82,21 @@ static int fastsleep_loop(struct cpuidle_device *dev,
 	new_lpcr |= LPCR_PECE0;
 
 	mtspr(SPRN_LPCR, new_lpcr);
-	power7_sleep();
+	trace_printk("Entering_fastsleep\n");
+	wakeup_srr1 = power7_sleep();
+	trace_printk("Exiting_fastsleep\n");
+
+	/* debug print */
+	if (!cpu_isset(mycpu, printed_mask)) {
+		spin_lock(&printed_lock);
+		cpu_set(mycpu, printed_mask);
+		spin_unlock(&printed_lock);
+		printk(KERN_NOTICE "powersave exit on cpu %d SRR1 %lx <%s>\n", mycpu,
+			wakeup_srr1, srr1_wakeup_bits[(wakeup_srr1 >> 16) & 0x3]);
+	}
+
+	trace_printk("powersave exit on cpu %d SRR1 %lx <%s>\n", mycpu,
+			wakeup_srr1, srr1_wakeup_bits[(wakeup_srr1 >> 16) & 0x3]);
 
 	mtspr(SPRN_LPCR, old_lpcr);
 

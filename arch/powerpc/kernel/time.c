@@ -900,6 +900,7 @@ void __init time_init(void)
 		       ppc_proc_freq / 1000000, ppc_proc_freq % 1000000);
 	}
 
+	printk("The boot_cpu is %d\n", smp_processor_id());
 	tb_ticks_per_jiffy = ppc_tb_freq / HZ;
 	tb_ticks_per_sec = ppc_tb_freq;
 	tb_ticks_per_usec = ppc_tb_freq / 1000000;
