@@ -90,6 +90,11 @@ static struct clock_event_device ce_broadcast_hrtimer = {
 static enum hrtimer_restart bc_handler(struct hrtimer *t)
 {
 	ce_broadcast_hrtimer.event_handler(&ce_broadcast_hrtimer);
+	trace_printk("bc_handler\n");
+
+	if (ce_broadcast_hrtimer.bound_on != smp_processor_id())
+		trace_printk("bc_handler_on %d, instead_of %d\n",
+			ce_broadcast_hrtimer.bound_on, smp_processor_id());
 
 	if (ce_broadcast_hrtimer.next_event.tv64 == KTIME_MAX)
 		return HRTIMER_NORESTART;
