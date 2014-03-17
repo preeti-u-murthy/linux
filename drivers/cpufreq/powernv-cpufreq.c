@@ -115,6 +115,23 @@ static struct freq_attr *powernv_cpu_freq_attr[] = {
 
 /* Helper routines */
 
+/**
+ * Sets the bits corresponding to the thread-siblings of cpu in its core
+ * in 'cpus'.
+ */
+static void powernv_cpu_to_core_mask(unsigned int cpu, cpumask_var_t cpus)
+{
+	int base, i;
+
+	base = cpu_first_thread_sibling(cpu);
+
+	for (i = 0; i < threads_per_core; i++) {
+		cpumask_set_cpu(base + i, cpus);
+	}
+
+	return;
+}
+
 /* Access helpers to power mgt SPR */
 
 static inline unsigned long get_pmspr(unsigned long sprn)
@@ -180,13 +197,8 @@ static int powernv_set_freq(cpumask_var_t cpus, unsigned int new_index)
 
 static int powernv_cpufreq_cpu_init(struct cpufreq_policy *policy)
 {
-	int base, i;
-
 #ifdef CONFIG_SMP
-	base = cpu_first_thread_sibling(policy->cpu);
-
-	for (i = 0; i < threads_per_core; i++)
-		cpumask_set_cpu(base + i, policy->cpus);
+	powernv_cpu_to_core_mask(policy->cpu, policy->cpus);
 #endif
 	policy->cpuinfo.transition_latency = 25000;
 
