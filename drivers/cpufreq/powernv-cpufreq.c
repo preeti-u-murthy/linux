@@ -39,6 +39,14 @@ static DEFINE_PER_CPU(struct mutex, freq_switch_lock);
 static struct cpufreq_frequency_table powernv_freqs[POWERNV_MAX_PSTATES+1];
 static int powernv_pstate_ids[POWERNV_MAX_PSTATES+1];
 
+struct powernv_pstate_info {
+	int pstate_min_id;
+	int pstate_max_id;
+	int pstate_nominal_id;
+	int nr_pstates;
+};
+static struct powernv_pstate_info powernv_pstate_info;
+
 /*
  * Initialize the freq table based on data obtained
  * from the firmware passed via device-tree
@@ -112,7 +120,26 @@ static int init_powernv_pstates(void)
 	for (i = 0; powernv_freqs[i].frequency != CPUFREQ_TABLE_END; i++)
 		pr_debug("%d: %d\n", i, powernv_freqs[i].frequency);
 
+	powernv_pstate_info.pstate_min_id = pstate_min;
+	powernv_pstate_info.pstate_max_id = pstate_max;
+	powernv_pstate_info.pstate_nominal_id = pstate_nominal;
+	powernv_pstate_info.nr_pstates = nr_pstates;
+
 	return 0;
+}
+
+/**
+ * Returns the cpu frequency corresponding to the pstate_id.
+ */
+static unsigned int pstate_id_to_freq(int pstate_id)
+{
+	int i;
+
+	i = powernv_pstate_info.pstate_max_id - pstate_id;
+
+	BUG_ON(i >= powernv_pstate_info.nr_pstates || i < 0);
+	WARN_ON(powernv_pstate_ids[i] != pstate_id);
+	return powernv_freqs[i].frequency;
 }
 
 static struct freq_attr *powernv_cpu_freq_attr[] = {
