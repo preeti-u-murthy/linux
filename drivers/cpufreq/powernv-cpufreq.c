@@ -223,6 +223,53 @@ static inline void set_pmspr(unsigned long sprn, unsigned long val)
 	BUG();
 }
 
+/*
+ * Computes the current frequency on this cpu
+ * and stores the result in *ret_freq.
+ */
+static void powernv_read_cpu_freq(void *ret_freq)
+{
+	unsigned long pmspr_val;
+	s8 local_pstate_id;
+	int *cur_freq, freq, pstate_id;
+
+	cur_freq = (int *)ret_freq;
+	pmspr_val = get_pmspr(SPRN_PMSR);
+
+	/* The local pstate id corresponds bits 48..55 in the PMSR.
+         * Note: Watch out for the sign! */
+	local_pstate_id = (pmspr_val >> 48) & 0xFF;
+	pstate_id = local_pstate_id;
+
+	freq = pstate_id_to_freq(pstate_id);
+	pr_debug("cpu %d pmsr %lx pstate_id %d frequency %d \n",
+		smp_processor_id(), pmspr_val, pstate_id, freq);
+	*cur_freq = freq;
+}
+
+/*
+ * Returns the cpu frequency as reported by the firmware for 'cpu'.
+ * This value is reported through the sysfs file cpuinfo_cur_freq.
+ */
+unsigned int powernv_cpufreq_get(unsigned int cpu)
+{
+	int ret_freq;
+	cpumask_var_t sibling_mask;
+
+	if (unlikely(!zalloc_cpumask_var(&sibling_mask, GFP_KERNEL))) {
+		smp_call_function_single(cpu, powernv_read_cpu_freq,
+					&ret_freq, 1);
+		return ret_freq;
+	}
+
+	powernv_cpu_to_core_mask(cpu, sibling_mask);
+	smp_call_function_any(sibling_mask, powernv_read_cpu_freq,
+			&ret_freq, 1);
+
+	free_cpumask_var(sibling_mask);
+	return ret_freq;
+}
+
 static void set_pstate(void *pstate)
 {
 	unsigned long val;
@@ -309,6 +356,7 @@ static int powernv_cpufreq_target(struct cpufreq_policy *policy,
 static struct cpufreq_driver powernv_cpufreq_driver = {
 	.verify		= powernv_cpufreq_verify,
 	.target		= powernv_cpufreq_target,
+	.get		= powernv_cpufreq_get,
 	.init		= powernv_cpufreq_cpu_init,
 	.exit		= powernv_cpufreq_cpu_exit,
 	.name		= "powernv-cpufreq",
