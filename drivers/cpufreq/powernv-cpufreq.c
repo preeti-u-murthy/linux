@@ -24,8 +24,15 @@
 #include <linux/of.h>
 #include <asm/cputhreads.h>
 
-/* FIXME: Make this per-core */
-static DEFINE_MUTEX(freq_switch_mutex);
+/* Per-Core locking for frequency transitions */
+static DEFINE_PER_CPU(struct mutex, freq_switch_lock);
+
+#define lock_core_freq(cpu)				\
+			mutex_lock(&per_cpu(freq_switch_lock,\
+				cpu_first_thread_sibling(cpu)));
+#define unlock_core_freq(cpu)				\
+			mutex_unlock(&per_cpu(freq_switch_lock,\
+				cpu_first_thread_sibling(cpu)));
 
 #define POWERNV_MAX_PSTATES	256
 
@@ -233,7 +240,7 @@ static int powernv_cpufreq_target(struct cpufreq_policy *policy,
 	freqs.new = powernv_freqs[new_index].frequency;
 	freqs.cpu = policy->cpu;
 
-	mutex_lock(&freq_switch_mutex);
+	lock_core_freq(policy->cpu);
 	cpufreq_notify_transition(policy, &freqs, CPUFREQ_PRECHANGE);
 
 	pr_debug("setting frequency for cpu %d to %d kHz index %d pstate %d",
@@ -245,7 +252,7 @@ static int powernv_cpufreq_target(struct cpufreq_policy *policy,
 	rc = powernv_set_freq(policy->cpus, new_index);
 
 	cpufreq_notify_transition(policy, &freqs, CPUFREQ_POSTCHANGE);
-	mutex_unlock(&freq_switch_mutex);
+	unlock_core_freq(policy->cpu);
 
 	return rc;
 }
@@ -262,7 +269,7 @@ static struct cpufreq_driver powernv_cpufreq_driver = {
 
 static int __init powernv_cpufreq_init(void)
 {
-	int rc = 0;
+	int cpu, rc = 0;
 
 	/* Discover pstates from device tree and init */
 
@@ -271,6 +278,10 @@ static int __init powernv_cpufreq_init(void)
 	if (rc) {
 		pr_info("powernv-cpufreq disabled\n");
 		return rc;
+	}
+	/* Init per-core mutex */
+	for_each_possible_cpu(cpu) {
+		mutex_init(&per_cpu(freq_switch_lock, cpu));
 	}
 
 	rc = cpufreq_register_driver(&powernv_cpufreq_driver);
