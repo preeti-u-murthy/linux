@@ -142,8 +142,30 @@ static unsigned int pstate_id_to_freq(int pstate_id)
 	return powernv_freqs[i].frequency;
 }
 
+/**
+ * show_cpuinfo_nominal_freq - Show the nominal CPU frequency as indicated by
+ * the firmware
+ */
+static ssize_t show_cpuinfo_nominal_freq(struct cpufreq_policy *policy,
+					char *buf)
+{
+	int nominal_freq;
+	nominal_freq = pstate_id_to_freq(powernv_pstate_info.pstate_nominal_id);
+	return sprintf(buf, "%u\n", nominal_freq);
+}
+
+
+struct freq_attr cpufreq_freq_attr_cpuinfo_nominal_freq = {
+	.attr = { .name = "cpuinfo_nominal_freq",
+		  .mode = 0444,
+		},
+	.show = show_cpuinfo_nominal_freq,
+};
+
+
 static struct freq_attr *powernv_cpu_freq_attr[] = {
 	&cpufreq_freq_attr_scaling_available_freqs,
+	&cpufreq_freq_attr_cpuinfo_nominal_freq,
 	NULL,
 };
 
